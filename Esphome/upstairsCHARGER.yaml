@@ -1,0 +1,384 @@
+substitutions:
+  name: "upstairs-controlpanel-charger"
+  friendly_name: "Upstairs Control Panel Charger"
+  wifi_network1_prefix: !secret wifi_network1_prefix
+  ip_suffix: "72"
+  timezone: "Australia/Perth"
+  # Set the duration between the sntp service polling ntp.org servers for an update
+  sntp_update_interval: 6h
+  # Network time servers for your region, enter from lowest to highest priority. To use local servers update as per zones or countries at: https://www.ntppool.org/zone/@
+  sntp_server_1: "0.pool.ntp.org"
+  sntp_server_2: "1.pool.ntp.org"
+  sntp_server_3: "2.pool.ntp.org"
+  room: ""
+  # Description as appears in ESPHome & top of webserver page
+  device_description: "Upstairs Control panel charger 4ch10amp"
+
+
+<<: !include .upstairswap.yaml
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  name_add_mac_suffix: false
+
+esp8266:
+  board: esp8285
+  restore_from_flash: true
+
+api:
+
+# Enable logging
+logger:
+  level: "DEBUG"
+  baud_rate: 115200
+
+# Enable over-the-air updates
+ota:
+  - platform: esphome
+  - platform: http_request
+
+# Web server configuration
+web_server:
+  version: 3
+  port: 80
+
+# HTTP request configuration
+http_request:
+  useragent: esphome_device
+  verify_ssl: false
+
+# Define switches (relays)
+switch:
+  - platform: gpio
+    pin: 16
+    id: relay_guest
+    name: "Guest Control Panel Battery Charger"
+    restore_mode: RESTORE_DEFAULT_ON
+  - platform: gpio
+    pin: 14
+    id: relay_foyer
+    name: "Foyer Control Panel Battery Charger"
+    restore_mode: RESTORE_DEFAULT_ON
+  - platform: gpio
+    pin: 12
+    id: upstairs_diffuser
+    name: "HVAC Upstairs Scent Diffuser"
+    icon: mdi:scent
+    on_turn_on:
+      - logger.log: "Applying Air Freshener"
+    on_turn_off:
+      - logger.log: "Not Applying Air Freshener"
+    restore_mode: RESTORE_DEFAULT_OFF
+  - platform: gpio
+    pin: 13
+    id: relay_spare
+    name: "Spare Control Panel Battery Charger"
+    restore_mode: RESTORE_DEFAULT_ON
+# Define a sensor for the diffuser status
+
+light:
+  - platform: status_led
+    name: "Status LED"
+    disabled_by_default: true
+    pin:
+      inverted: true
+      number: GPIO5
+
+# Define sensors
+sensor:
+  - platform: uptime
+    name: "Uptime Sensor"
+    id: uptime_sensor
+    entity_category: diagnostic
+    internal: true
+
+  - platform: wifi_signal
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  - platform: copy
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+    device_class: ""
+  - platform: template
+    name: "Guest Panel Battery Level"
+    id: battery_level_guest
+    unit_of_measurement: "%"
+    update_interval: 45s
+    accuracy_decimals: 0
+    icon: mdi:power-plug-off
+  - platform: template
+    name: "Foyer Panel Battery Level"
+    id: battery_level_foyer
+    unit_of_measurement: "%"
+    update_interval: 30s
+    accuracy_decimals: 0
+    icon: mdi:power-plug-off
+  - platform: template
+    name: "Spare Control Panel Battery Level"
+    id: battery_level_spare
+    unit_of_measurement: "%"
+    update_interval: 35s
+    accuracy_decimals: 0
+    icon: mdi:power-plug-off    
+
+interval:
+  - interval: 30s
+    then:
+      - http_request.get:
+          url: http://192.168.40.29:2323/?cmd=deviceInfo&type=json&password=10xTENfold87
+          capture_response: true
+          on_response:
+            then:
+              - lambda: |-
+                  ESP_LOGI("HTTP Response", "Response body: %s", body.c_str());
+                  std::string body_str = body.c_str();
+                  int battery_pos = body_str.find("\"batteryLevel\"");
+                  if (battery_pos != std::string::npos) {
+                      int value_start = body_str.find(":", battery_pos) + 1;
+                      int value_end = body_str.find(",", value_start);
+                      std::string battery_value = body_str.substr(value_start, value_end - value_start);
+                      float battery = atof(battery_value.c_str());
+                      id(battery_level_foyer).publish_state(battery);
+                      ESP_LOGI("Battery Logger", "Extracted Battery level: %.2f%%", battery);
+                  } else {
+                      ESP_LOGE("Battery Logger", "batteryLevel not found in response");
+                  }
+              
+              - lambda: |-
+                  if (id(battery_level_foyer).state < 20) {
+                    id(relay_foyer).turn_on();
+                    ESP_LOGI("Battery Automation", "Battery below 20 percent, turning on Foyer Control Panel Charger.");
+                  } else if (id(battery_level_foyer).state > 80) {
+                    id(relay_foyer).turn_off();
+                    ESP_LOGI("Battery Automation", "Battery above 80 percent, turning off Foyer Control Panel Charger.");
+                  } else if (isnan(id(battery_level_foyer).state)) {
+                    id(relay_foyer).turn_on();
+                    ESP_LOGI("Battery Automation", "Battery sensor unavailable, keeping Foyer Panel Charger ON.");
+                    id(wake_foyer_button).press();
+                    ESP_LOGI("Battery Automation", "Foyer Control Panel status not found.. possibly offline, Sending Wake on LAN Magic packet.");
+                  }
+  - interval: 45s
+    then:
+      - http_request.get:
+          url: http://192.168.40.3:2323/?cmd=deviceInfo&type=json&password=10xTENfold87
+          capture_response: true
+          on_response:
+            then:
+              - lambda: |-
+                  ESP_LOGI("HTTP Response", "Response body: %s", body.c_str());
+                  std::string body_str = body.c_str();
+                  int battery_pos = body_str.find("\"batteryLevel\"");
+                  if (battery_pos != std::string::npos) {
+                      int value_start = body_str.find(":", battery_pos) + 1;
+                      int value_end = body_str.find(",", value_start);
+                      std::string battery_value = body_str.substr(value_start, value_end - value_start);
+                      float battery = atof(battery_value.c_str());
+                      id(battery_level_guest).publish_state(battery);
+                      ESP_LOGI("Battery Logger", "Extracted Battery level: %.2f%%", battery);
+                  } else {
+                      ESP_LOGE("Battery Logger", "batteryLevel not found in response");
+                  }
+
+              - lambda: |-
+                  if (id(battery_level_guest).state < 20) {
+                    id(relay_guest).turn_on();
+                    ESP_LOGI("Battery Automation", "Battery below 20 percent, turning on Guest Control Panel Charger.");
+                  } else if (id(battery_level_guest).state > 80) {
+                    id(relay_guest).turn_off();
+                    ESP_LOGI("Battery Automation", "Battery above 80 percent, turning off Guest Control Panel Charger.");
+                  } else if (isnan(id(battery_level_guest).state)) {
+                    id(relay_guest).turn_on();
+                    ESP_LOGI("Battery Automation", "Battery sensor unavailable, keeping Guest Panel Charger ON.");
+                    id(wake_guest_button).press();
+                    ESP_LOGI("Battery Automation", "Guest Control Panel status not found.. possibly offline, Sending Wake on LAN Magic packet.");
+                  }
+
+  - interval: 35s
+    then:
+      - http_request.get:
+          url: http://192.168.40.30:2323/?cmd=deviceInfo&type=json&password=10xTENfold87!
+          capture_response: true
+          on_response:
+            then:
+              - lambda: |-
+                  ESP_LOGI("HTTP Response", "Response body: %s", body.c_str());
+                  std::string body_str = body.c_str();
+                  int battery_pos = body_str.find("\"batteryLevel\"");
+                  if (battery_pos != std::string::npos) {
+                      int value_start = body_str.find(":", battery_pos) + 1;
+                      int value_end = body_str.find(",", value_start);
+                      std::string battery_value = body_str.substr(value_start, value_end - value_start);
+                      float battery = atof(battery_value.c_str());
+                      id(battery_level_spare).publish_state(battery);
+                      ESP_LOGI("Battery Logger", "Extracted Battery level: %.2f%%", battery);
+                  } else {
+                      ESP_LOGE("Battery Logger", "batteryLevel not found in response");
+                  }
+              
+              - lambda: |-
+                  if (id(battery_level_spare).state < 20) {
+                    id(relay_spare).turn_on();
+                    ESP_LOGI("Battery Automation", "Battery below 20 percent, turning on Spare Control Panel Charger.");
+                  } else if (id(battery_level_spare).state > 80) {
+                    id(relay_spare).turn_off();
+                    ESP_LOGI("Battery Automation", "Battery above 80 percent, turning off Spare Control Panel Charger.");
+                  } else if (isnan(id(battery_level_spare).state)) {
+                    id(relay_spare).turn_on();
+                    ESP_LOGI("Battery Automation", "Battery sensor unavailable, keeping Spare Panel Charger ON.");
+                    id(wake_spare_button).press(); 
+                    ESP_LOGI("Battery Automation", "Spare Panel status possibly offline, Sending Wake on LAN Magic packet.");
+                  }
+binary_sensor:
+  - platform: template
+    name: "Guest Charger Status"
+    id: guest_charger_status
+    device_class: battery_charging
+    lambda: |-
+      return id(relay_guest).state;
+      
+  - platform: template
+    name: "Foyer Charger Status"
+    id: foyer_charger_status
+    device_class: battery_charging
+    lambda: |-
+      return id(relay_foyer).state;
+      
+  - platform: template
+    name: "Spare Charger Status"
+    id: spare_charger_status
+    device_class: battery_charging
+    lambda: |-
+      return id(relay_spare).state;
+  - platform: status
+    name: "Status"
+    entity_category: diagnostic
+      
+button:
+  - platform: wake_on_lan
+    name: "Wake Foyer Control Panel"
+    id: "wake_foyer_button"
+    target_mac_address: a8:4b:4d:64:1b:7d
+  - platform: wake_on_lan
+    name: "Wake Guest Control Panel"
+    id: "wake_guest_button"
+    target_mac_address: 24:c6:13:70:84:25
+  - platform: wake_on_lan
+    name: "Wake Spare Control Panel"
+    id: "wake_spare_button"
+    target_mac_address: 24:c6:13:70:84:27
+  - platform: restart
+    name: "Restart"
+    entity_category: config
+
+  - platform: factory_reset
+    name: "Factory Reset"
+    id: Reset
+    entity_category: config
+
+  - platform: safe_mode
+    name: "Safe Mode"
+    internal: false
+    entity_category: config
+  - platform: template
+    name: "Switch to Tasmota"
+    on_press:
+      then:
+        - ota.http_request.flash:
+            md5_url: github://trendstyle/theautomatichome.com/Tasmota/tasmota.md5
+            url: github://trendstyle/theautomatichome.com/Tasmota/tasmota.bin.gz
+        - logger.log: "This message should be not displayed because the device reboots"
+  - platform: template
+    name: "Factory reset ESPHOME"
+    on_press:
+      then:
+        - ota.http_request.flash:
+            md5_url: github://trendstyle/theautomatichome.com/Esphome/upstairscharger.md5
+            url: github://trendstyle/theautomatichome.com/EpstairsCHARGER/upstairscharger.bin
+        - logger.log: "This message should be not displayed because the device reboots"
+
+text_sensor:
+  - platform: template
+    name: "Diffuser Status"
+    lambda: |-
+      if (id(upstairs_diffuser).state) {
+        return {"Applying Air Freshener"};
+      } else {
+        return {"Not Applying Air Freshener"};
+      }
+    icon: "mdi:scent"
+    update_interval: 10s
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+      entity_category: diagnostic
+    ssid:
+      name: "Connected SSID"
+      entity_category: diagnostic
+    mac_address:
+      name: "Mac Address"
+      entity_category: diagnostic
+
+  #  Creates a sensor showing when the device was last restarted
+  - platform: template
+    name: 'Last Restart'
+    id: device_last_restart
+    icon: mdi:clock
+    entity_category: diagnostic
+#    device_class: timestamp
+
+  #  Creates a sensor of the uptime of the device, in formatted days, hours, minutes and seconds
+  - platform: template
+    name: "Uptime"
+    entity_category: diagnostic
+    lambda: |-
+      int seconds = (id(uptime_sensor).state);
+      int days = seconds / (24 * 3600);
+      seconds = seconds % (24 * 3600);
+      int hours = seconds / 3600;
+      seconds = seconds % 3600;
+      int minutes = seconds /  60;
+      seconds = seconds % 60;
+      if ( days > 3650 ) {
+        return { "Starting up" };
+      } else if ( days ) {
+        return { (String(days) +"d " + String(hours) +"h " + String(minutes) +"m "+ String(seconds) +"s").c_str() };
+      } else if ( hours ) {
+        return { (String(hours) +"h " + String(minutes) +"m "+ String(seconds) +"s").c_str() };
+      } else if ( minutes ) {
+        return { (String(minutes) +"m "+ String(seconds) +"s").c_str() };
+      } else {
+        return { (String(seconds) +"s").c_str() };
+      }
+    icon: mdi:clock-start
+
+time:
+  - platform: sntp
+    id: sntp_time
+  # Define the timezone of the device
+    timezone: "${timezone}"
+  # Change sync interval from default 5min to 6 hours (or as set in substitutions)
+    update_interval: ${sntp_update_interval}
+  # Set specific sntp servers to use
+    servers:
+      - "${sntp_server_1}"
+      - "${sntp_server_2}"
+      - "${sntp_server_3}"
+  # Publish the time the device was last restarted
+    on_time_sync:
+      then:
+        # Update last restart time, but only once.
+        - if:
+            condition:
+              lambda: 'return id(device_last_restart).state == "";'
+            then:
+              - text_sensor.template.publish:
+                  id: device_last_restart
+                  state: !lambda 'return id(sntp_time).now().strftime("%a %d %b %Y - %I:%M:%S %p");'
