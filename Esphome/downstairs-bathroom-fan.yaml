@@ -1,0 +1,207 @@
+substitutions:
+  name: "downstairs-bathroom-light"
+  friendly_name: "Downstairs Bathroom Light"
+  wifi_network1_prefix1: !secret wifi_network1_prefix1
+  ip_suffix: "148"
+  timezone: "Australia/Perth"
+  # Set the duration between the sntp service polling ntp.org servers for an update
+  sntp_update_interval: 6h
+  # Network time servers for your region, enter from lowest to highest priority. To use local servers update as per zones or countries at: https://www.ntppool.org/zone/@
+  sntp_server_1: "0.pool.ntp.org"
+  sntp_server_2: "1.pool.ntp.org"
+  sntp_server_3: "2.pool.ntp.org"
+  room: ""
+  light_restore_mode: RESTORE_DEFAULT_OFF
+  # Description as appears in ESPHome & top of webserver page
+  device_description: "Downstairs Bathroom Light switch 1gang"
+
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  name_add_mac_suffix: false
+
+http_request:
+  id: lights
+  verify_ssl: false
+
+esp8266:
+  board: esp8285
+  restore_from_flash: true
+
+preferences:
+  flash_write_interval: 1min
+
+api:
+
+ota:
+  - platform: esphome
+  - platform: http_request
+
+logger:
+  level: INFO
+  baud_rate: 115200
+
+
+web_server:
+  port: 80
+  version: 3
+
+globals:
+  - id: restore_mode
+    type: int
+    restore_value: yes
+    initial_value: "3"
+
+select:
+  - platform: template
+    name: "Power On State"
+    id: "power_mode_select"
+    optimistic: true
+    options:
+      - Always Off
+      - Always On
+      - Restore Power Off State
+    on_value:
+      then:
+        - lambda: |-
+            id(restore_mode) = i + 1;
+
+button:
+  - platform: restart
+    name: "Restart"
+    entity_category: config
+
+  - platform: factory_reset
+    name: "Factory Reset"
+    id: reset_button
+    entity_category: config
+
+  - platform: safe_mode
+    name: "Safe Mode"
+    internal: false
+    entity_category: config
+
+  - platform: template
+    name: "Switch to Tasmota"
+    entity_category: diagnostic
+    on_press:
+      then:
+        - ota.http_request.flash:
+            md5_url: github://trendstyle/theautomatichome.com/Tasmota/tasmota.md5
+            url: github://trendstyle/theautomatichome.com/Tasmota/tasmota.bin.gz
+        - logger.log: "This message should be not displayed because the device reboots"
+  - platform: template
+    name: "Factory reset ESPHOME"
+    entity_category: diagnostic
+    on_press:
+      then:
+        - ota.http_request.flash:
+            md5_url: github://trendstyle/theautomatichome.com/Esphome/downstairsbathroomlight.md5
+            url: github://trendstyle/theautomatichome.com/EpstairsCHARGER/downstairsbathroomlight.bin
+        - logger.log: "This message should be not displayed because the device reboots"
+
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      inverted: true
+      number: GPIO3
+      mode:
+        input: true
+        pullup: true
+    name: "Button"
+    id: button2
+    disabled_by_default: true
+    on_multi_click:
+      - timing:
+          - ON for at most 0.5s
+          - OFF for at least 0.2s
+        then:
+          - light.toggle: light1
+      - timing:
+          - ON for at least 4s
+        then:
+          - button.press: reset_button
+    on_press:
+      then:
+        # First check if the local light is ON or OFF
+        - if:
+            condition:
+              light.is_on: light1
+            then:
+              # Send HTTP POST request to turn off the remote light
+              - http_request.post:
+                  url: "http://192.168.31.100/switch/fan/turn_off"
+              - logger.log: "Remote Exhaust Fan turned off"
+        - if:
+            condition:
+              light.is_off: light1
+            then:
+              # Send HTTP POST request to turn on the remote light
+              - http_request.post:
+                  url: "http://192.168.31.100/switch/fan/turn_on"
+              - logger.log: "Remote Exhaust Fan turned on"
+
+
+sensor:
+  - platform: uptime
+    name: "Uptime Sensor"
+    id: uptime_sensor_1  # Updated ID to avoid conflict
+    entity_category: diagnostic
+    internal: true
+
+  - platform: wifi_signal
+    name: "WiFi Signal dB"
+    id: wifi_signal_db_1  # Updated ID to avoid conflict
+    update_interval: 60s
+    entity_category: "diagnostic"
+
+  - platform: copy
+    source_id: wifi_signal_db_1
+    name: "WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "Signal %"
+    entity_category: "diagnostic"
+    device_class: ""
+
+light:
+  - platform: status_led
+    name: "Status LED"
+    disabled_by_default: true
+    pin:
+      number: GPIO0
+      inverted: true
+
+  - platform: binary
+    name: "light"
+    id: light1
+    output: relay1
+    restore_mode: ${light_restore_mode}
+    on_turn_on:
+      - light.turn_on: led1
+    on_turn_off:
+      - light.turn_off: led1
+  # Button LED
+  - platform: monochromatic
+    name: "LED"
+    disabled_by_default: true
+    id: led1
+    output: button_led1
+    default_transition_length: 500ms
+
+
+output:
+  # Relay
+  - platform: gpio
+    pin: GPIO13
+    id: relay1
+
+  # Button LED (1.0 = Blue / 0.0 = Red)
+  - platform: esp8266_pwm
+    pin: GPIO16
+    inverted: true
+    id: button_led1
+
+<<: !include .gallerywap11.yaml

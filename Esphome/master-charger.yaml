@@ -1,0 +1,75 @@
+substitutions:
+  name: "master-charger"
+  friendly_name: "Master Panel Charger"
+  wifi_network1_prefix: !secret wifi_network1_prefix
+  ip_suffix: "117"
+packages:
+  Athom_Technology.Smart_Plug_V2: github://athom-tech/athom-configs/athom-smart-plug-v2.yaml
+<<: !include .masterwap.yaml
+
+http_request:
+  verify_ssl: false
+
+binary_sensor:
+  - platform: template
+    name: "Master Charger Status"
+    id: master_charger_status
+    device_class: battery_charging
+    lambda: |-
+      return id(relay).state;
+
+sensor:
+  - platform: template
+    name: "Master Control Panel Battery Level"
+    id: battery_level_master
+    unit_of_measurement: "%"
+    update_interval: 35s
+    accuracy_decimals: 0
+    icon: mdi:power-plug-off   
+
+interval:
+  - interval: 30s
+    then:
+      - http_request.get:
+          url: http://192.168.40.30:2323/?cmd=deviceInfo&type=json&password=10xTENfold87!
+          capture_response: true
+          on_response:
+            then:
+              - lambda: |-
+                  ESP_LOGI("HTTP Response", "Response body: %s", body.c_str());
+                  std::string body_str = body.c_str();
+                  int battery_pos = body_str.find("\"batteryLevel\"");
+                  if (battery_pos != std::string::npos) {
+                      int value_start = body_str.find(":", battery_pos) + 1;
+                      int value_end = body_str.find(",", value_start);
+                      std::string battery_value = body_str.substr(value_start, value_end - value_start);
+                      float battery = atof(battery_value.c_str());
+                      id(battery_level_master).publish_state(battery);
+                      ESP_LOGI("Battery Logger", "Extracted Battery level: %.2f%%", battery);
+                  } else {
+                      ESP_LOGE("Battery Logger", "batteryLevel not found in response");
+                  }
+
+              - lambda: |-
+                  if (id(battery_level_master).state < 20) {
+                    id(relay).turn_on();
+                    ESP_LOGI("Battery Automation", "Battery below 20 percent, turning on Master Control Panel Charger.");
+                  } else if (id(battery_level_master).state > 80) {
+                    id(relay).turn_off();
+                    ESP_LOGI("Battery Automation", "Battery above 80 percent, turning off Master Control Panel Charger.");
+                  } else if (isnan(id(battery_level_master).state)) {
+                    id(relay).turn_on();
+                    ESP_LOGI("Battery Automation", "Battery sensor unavailable, keeping Master Panel Charger ON.");
+                    id(wake_master_button).press();
+                    ESP_LOGI("Battery Automation", "Master Panel status possibly offline, Sending Wake on LAN Magic packet.");
+                  }
+
+button:
+  - platform: wake_on_lan
+    name: "Wake Master Control Panel"
+    id: "wake_master_button"
+    target_mac_address: a8:4b:4d:64:1b:7d
+
+
+
+
