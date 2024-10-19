@@ -2,7 +2,7 @@ substitutions:
   # Default name
   name: "automatichome-2gang-switch"
   # Default friendly name
-  friendly_name: "theautomatichome.com 2Gang Switch"
+  friendly_name: "2Gang Switch"
   # Allows ESP device to be automatically linked to an 'Area' in Home Assistant. Typically used for areas such as 'Lounge Room', 'Kitchen' etc
   room: ""
   # Description as appears in ESPHome & top of webserver page

@@ -1,8 +1,8 @@
 substitutions:
-  name: "Foyer-stairway-Light-switch"
+  name: "foyer-stairway-light"
   friendly_name: "Bottom Foyer Stairs Light Switches"
   wifi_network1_prefix: !secret wifi_network1_prefix
-  ip_suffix: "148"
+  ip_suffix: "116"
   timezone: "Australia/Perth"
   # Set the duration between the sntp service polling ntp.org servers for an update
   sntp_update_interval: 6h
@@ -20,8 +20,8 @@ substitutions:
   project_name: "The Automatic Home.2Gang Switch V2"
   # Projection version denotes the release version of the yaml file, allowing checking of deployed vs latest version
   project_version: "v1.1.2"
-  wifi_fast_connect: "true"
   dns_domain: ""
+  localssid: "bottomstairslights"
 
 <<: !include .upstairswap.yaml
 
@@ -29,7 +29,6 @@ substitutions:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  name_add_mac_suffix: false
   comment: "${device_description}"
   area: "${room}"
   name_add_mac_suffix: true
@@ -48,13 +47,13 @@ esphome:
               switch(id(restore_mode))
               {
               case 1:{
-                      id(light1).turn_off();
-                      id(light2).turn_off();
+                      id(stair_light_bottom).turn_off();
+                      id(hallway_light).turn_off();
                       break;
                             }
               case 2:{
-                      id(light1).turn_on();
-                      id(light2).turn_on();
+                      id(stair_light_bottom).turn_on();
+                      id(hallway_light).turn_on();
                       break;
                             }
               default:{
@@ -93,14 +92,6 @@ network:
 http_request:
   verify_ssl: false
 
-wifi:
-  # This spawns an AP with the device name and mac address with no password.
-  ap: {}
-  # Allow rapid re-connection to previously connect WiFi SSID, skipping scan of all SSID
-  fast_connect: "${wifi_fast_connect}"
-  # Define dns domain / suffix to add to hostname
-  domain: "${dns_domain}"
-
 captive_portal:
 
 dashboard_import:
@@ -116,7 +107,7 @@ globals:
 select:
   - platform: template
     name: "Power On State"
-    id: "power_mode_select"
+    id: "power_mode"
     optimistic: true
     options:
       - Always Off
@@ -149,7 +140,7 @@ binary_sensor:
           - ON for at most 0.5s
           - OFF for at least 0.2s
         then:
-          - light.toggle: light1
+          - light.toggle: stair_light_bottom
       - timing:
           - ON for at least 4s
         then:
@@ -159,7 +150,7 @@ binary_sensor:
         # First check if the local light is ON or OFF
         - if:
             condition:
-              light.is_on: light1
+              light.is_on: stair_light_bottom
             then:
               # Send HTTP POST request to turn off the remote light
               - http_request.post:
@@ -167,7 +158,7 @@ binary_sensor:
               - logger.log: "Remote Switch at top of stairs has been turned off"
         - if:
             condition:
-              light.is_off: light1
+              light.is_off: stair_light_bottom
             then:
               # Send HTTP POST request to turn on the remote light
               - http_request.post:
@@ -187,7 +178,7 @@ binary_sensor:
     on_click:
       max_length: 0.5s
       then:
-        - light.toggle: light2
+        - light.toggle: hallway_light
 
 sensor:
   - platform: uptime
@@ -279,7 +270,7 @@ light:
   # Relays
   - platform: binary
     name: "Stair-Lights-Bottom-Switch"
-    id: stair-light-bottom
+    id: stair_light_bottom
     output: relay1
     restore_mode: ${light1_restore_mode}
     on_turn_on:
@@ -289,7 +280,7 @@ light:
 
   - platform: binary
     name: "Hallway-light"
-    id: hallway-light
+    id: hallway_light
     output: relay2
     restore_mode: ${light2_restore_mode}
     on_turn_on:
