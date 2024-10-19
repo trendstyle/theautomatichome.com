@@ -110,7 +110,7 @@ wifi:
 captive_portal:
 
 dashboard_import:
-  package_import_url: github://trendstyle/theautomatichome.com/Esphome/2gang-switch.yaml
+  package_import_url: github://trendstyle/theautomatichome.com/Esphome//Public-firmwares/2gang-switch.yaml
 
 
 esphome:
