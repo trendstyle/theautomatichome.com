@@ -269,7 +269,7 @@ light:
 
   # Relays
   - platform: binary
-    name: "Stair-Lights-Bottom-Switch"
+    name: "Stairs"
     id: stair_light_bottom
     output: relay1
     restore_mode: ${light1_restore_mode}
@@ -279,7 +279,7 @@ light:
       - light.turn_off: led1
 
   - platform: binary
-    name: "Hallway-light"
+    name: "Hallway"
     id: hallway_light
     output: relay2
     restore_mode: ${light2_restore_mode}
