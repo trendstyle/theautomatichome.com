@@ -145,6 +145,31 @@ binary_sensor:
           - ON for at least 4s
         then:
           - button.press: Reset
+    on_press:
+      then:
+        # First check if the local light is ON or OFF
+        - if:
+            condition:
+              light.is_on: landing
+            then:
+              # Send HTTP POST request to turn off the remote light
+              - http_request.post:
+                  url: "http://192.168.30.94/light/landing/turn_off"
+              - logger.log: "Remote Switch at midway landing has been turned off"
+              - http_request.post:
+                  url: "http://192.168.31.231/light/landing/turn_off"
+              - logger.log: "Remote Switch at top of second stairs has been turned off"
+        - if:
+            condition:
+              light.is_off: landing
+            then:
+              # Send HTTP POST request to turn on the remote light
+              - http_request.post:
+                  url: "http://192.168.30.94/light/landing/turn_on"
+              - logger.log: "Remote Switch at midway landing has been turned on"
+              - http_request.post:
+                  url: "http://192.168.31.231/light/landing/turn_on"
+              - logger.log: "Remote Switch at second stairs has been turned on"
 
 
   - platform: gpio
