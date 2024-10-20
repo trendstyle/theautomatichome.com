@@ -154,7 +154,7 @@ binary_sensor:
             then:
               # Send HTTP POST request to turn off the remote light
               - http_request.post:
-                  url: "http://192.168.30.55/light/light/turn_off"
+                  url: "http://192.168.30.55/light/stairs/turn_off"
               - logger.log: "Remote Switch at top of stairs has been turned off"
         - if:
             condition:
@@ -162,7 +162,7 @@ binary_sensor:
             then:
               # Send HTTP POST request to turn on the remote light
               - http_request.post:
-                  url: "http://192.168.30.55/light/light/turn_on"
+                  url: "http://192.168.30.55/light/stairs/turn_on"
               - logger.log: "Remote Switch at top of stairs has been turned on"
 
   - platform: gpio

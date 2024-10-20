@@ -1,8 +1,8 @@
 substitutions:
-  name: "midlanding-light"
-  friendly_name: "Midway Landing Light Switches"
-  wifi_network1_prefix: !secret wifi_network1_prefix
-  ip_suffix: "94"
+  name: "top-winecellar-stairs"
+  friendly_name: "Light Switches at top of the wine cellar stairs"
+  wifi_network1_prefix1: !secret wifi_network1_prefix1
+  ip_suffix: "231"
   timezone: "Australia/Perth"
   # Set the duration between the sntp service polling ntp.org servers for an update
   sntp_update_interval: 6h
@@ -13,21 +13,23 @@ substitutions:
   room: "Landing"
   light1_restore_mode: RESTORE_DEFAULT_OFF
   light2_restore_mode: RESTORE_DEFAULT_OFF
+  light3_restore_mode: RESTORE_DEFAULT_OFF
   # Description as appears in ESPHome & top of webserver page
-  device_description: "2-Gang Wall light switch located at midway down upstairs landing esp8266"
+  device_description: "3-Gang Wall light switch located at top of stairs above wine cellar esp8266"
   log_level: "DEBUG"
   ipv6_enable: "false"
   project_name: "The Automatic Home.2Gang Switch V2"
   # Projection version denotes the release version of the yaml file, allowing checking of deployed vs latest version
   project_version: "v1.1.2"
   dns_domain: ""
-  localssid: "midlandinglight"
+  localssid: "topwinestairs"
 
-<<: !include .upstairswap.yaml
+<<: !include .masterwap11.yaml
+
 
 esphome:
-  name: "${name}"
-  friendly_name: "${friendly_name}"
+  name: ${name}
+  friendly_name: ${friendly_name}
   comment: "${device_description}"
   area: "${room}"
   name_add_mac_suffix: false
@@ -47,16 +49,21 @@ esphome:
               {
               case 1:{
                       id(landing).turn_off();
+                      id(stairs).turn_off();
+                      id(serverroom).turn_off();
                       break;
                             }
               case 2:{
                       id(landing).turn_on();
+                      id(stairs).turn_on();
+                      id(serverroom).turn_on();
                       break;
                             }
               default:{
                       break;
                             }
               }
+
 
 esp8266:
   board: esp8285
@@ -91,7 +98,7 @@ http_request:
 captive_portal:
 
 dashboard_import:
-  package_import_url: github://trendstyle/theautomatichome.com/Esphome/1gang-light.yaml
+  package_import_url: github://trendstyle/theautomatichome.com/Esphome/3gang-light.yaml
 
 
 globals:
@@ -124,7 +131,7 @@ binary_sensor:
   - platform: gpio
     pin:
       inverted: true
-      number: GPIO3
+      number: GPIO12
       mode:
         input: true
         pullup: true
@@ -150,23 +157,91 @@ binary_sensor:
             then:
               # Send HTTP POST request to turn off the remote light
               - http_request.post:
-                  url: "http://192.168.30.55/light/landing/turn_off"
-              - logger.log: "Remote Switch at top of stairs has been turned off"
+                  url: "http://192.168.30.94/light/landing/turn_off"
+              - logger.log: "Remote Switch at midway landing has been turned off"
               - http_request.post:
-                  url: "http://192.168.31.231/light/landing/turn_off"
-              - logger.log: "Remote Switch at top of second stairs has been turned off"
+                  url: "http://192.168.30.55/light/landing/turn_off"
+              - logger.log: "Remote Switch at top of foyer stairs has been turned off"
         - if:
             condition:
               light.is_off: landing
             then:
               # Send HTTP POST request to turn on the remote light
               - http_request.post:
-                  url: "http://192.168.30.55/light/landing/turn_on"
-              - logger.log: "Remote Switch at top of stairs has been turned on"
+                  url: "http://192.168.30.94/light/landing/turn_on"
+              - logger.log: "Remote Switch at midway landing has been turned on"
               - http_request.post:
-                  url: "http://192.168.31.231/light/landing/turn_on"
-              - logger.log: "Remote Switch at second stairs has been turned on"
+                  url: "http://192.168.30.55/light/landing/turn_on"
+              - logger.log: "Remote Switch at top of foyer stairs has been turned on"
 
+
+  - platform: gpio
+    pin:
+      inverted: true
+      number: GPIO3
+      mode:
+        input: true
+        pullup: true
+    name: "Button3"
+    id: button3
+    disabled_by_default: true
+    on_click:
+      max_length: 0.5s
+      then:
+        - light.toggle: serverroom
+    on_press:
+      then:
+        # First check if the local light is ON or OFF
+        - if:
+            condition:
+              light.is_on: serverroom
+            then:
+              # Send HTTP POST request to turn off the remote light
+              - http_request.post:
+                  url: "http://192.168.30.113/light/serverroom/turn_off"
+              - logger.log: "Remote Switch at server room ladder has been turned off"
+        - if:
+            condition:
+              light.is_off: serverroom
+            then:
+              # Send HTTP POST request to turn on the remote light
+              - http_request.post:
+                  url: "http://192.168.30.116/light/serverroom/turn_on"
+              - logger.log: "Remote Switch at sever room ladder has been turned on"
+
+  - platform: gpio
+    pin:
+      inverted: true
+      number: GPIO5
+      mode:
+        input: true
+        pullup: true
+    name: "Button2"
+    id: button2
+    disabled_by_default: true
+    on_click:
+      max_length: 0.5s
+      then:
+        - light.toggle: stairs
+    on_press:
+      then:
+        # First check if the local light is ON or OFF
+        - if:
+            condition:
+              light.is_on: stairs
+            then:
+              # Send HTTP POST request to turn off the remote light
+              - http_request.post:
+                  url: "http://192.168.30.119/light/stairs/turn_off"
+              - logger.log: "Remote Switch at server room ladder has been turned off"
+        - if:
+            condition:
+              light.is_off: stairs
+            then:
+              # Send HTTP POST request to turn on the remote light
+              - http_request.post:
+                  url: "http://192.168.30.119/light/stairs/turn_on"
+              - logger.log: "Remote Switch at sever room ladder has been turned on"
 
 sensor:
   - platform: uptime
@@ -220,8 +295,8 @@ button:
     on_press:
       then:
         - ota.http_request.flash:
-            md5_url: github://trendstyle/theautomatichome.com/Esphome/midlandinglight.md5
-            url: github://trendstyle/theautomatichome.com/Esphome/midlandinglight.bin
+            md5_url: github://trendstyle/theautomatichome.com/Esphome/topwinestairs.md5
+            url: github://trendstyle/theautomatichome.com/Esphome/topwinestairs.bin
         - logger.log: "This message should be not displayed because the device reboots"
 
 output:
@@ -229,7 +304,12 @@ output:
   - platform: gpio
     pin: GPIO13
     id: relay1
-
+  - platform: gpio
+    pin: GPIO4
+    id: relay2
+  - platform: gpio
+    pin: GPIO15
+    id: relay3
 
   # - platform: gpio
   #   pin: GPIO16
@@ -240,14 +320,22 @@ output:
     pin: GPIO16
     inverted: true
     id: button_led1
+  - platform: esp8266_pwm
+    pin: GPIO14
+    inverted: true
+    id: button_led2
+  - platform: esp8266_pwm
+    pin: GPIO1
+    inverted: true
+    id: button_led3
 
 light:
-  - platform: status_led
-    name: "Status LED"
-    disabled_by_default: true
-    pin:
-      number: GPIO0
-      inverted: true
+ # - platform: status_led
+  #  name: "Status LED"
+   # disabled_by_default: true
+    #pin:
+#      number: GPIO0
+ #     inverted: true
 
   # Relays
   - platform: binary
@@ -260,6 +348,25 @@ light:
     on_turn_off:
       - light.turn_off: led1
 
+  - platform: binary
+    name: "stairs"
+    id: stairs
+    output: relay2
+    restore_mode: ${light2_restore_mode}
+    on_turn_on:
+      - light.turn_on: led2
+    on_turn_off:
+      - light.turn_off: led2
+
+  - platform: binary
+    name: "serverroom"
+    id: serverroom
+    output: relay3
+    restore_mode: ${light3_restore_mode}
+    on_turn_on:
+      - light.turn_on: led3
+    on_turn_off:
+      - light.turn_off: led3
 
   # Button LEDs
   - platform: monochromatic
@@ -267,6 +374,19 @@ light:
     disabled_by_default: true
     id: led1
     output: button_led1
+    default_transition_length: 500ms
+
+  - platform: monochromatic
+    name: "LED2"
+    disabled_by_default: true
+    id: led2
+    output: button_led2
+    default_transition_length: 500ms
+  - platform: monochromatic
+    name: "LED3"
+    disabled_by_default: true
+    id: led3
+    output: button_led3
     default_transition_length: 500ms
 
 text_sensor:
