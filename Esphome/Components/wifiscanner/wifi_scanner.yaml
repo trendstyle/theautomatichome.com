@@ -1,0 +1,8 @@
+platform: external_component
+component: wifi_scanner.WifiScanner
+
+sensors:
+  - platform: wifi_scanner
+
+binary_sensors:
+  - platform: wifi_scanner
