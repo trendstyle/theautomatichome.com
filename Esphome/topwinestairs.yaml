@@ -20,7 +20,7 @@ substitutions:
   dns_domain: ""
   localssid: "topwinestairs"
 
-<<: !include .masterwap11.yaml
+<<: !include .gallerywap11.yaml
 
 esphome:
   name: ${name}
@@ -344,7 +344,6 @@ time:
      #     wifi::global_wifi_component->start_scanning();  // Manually trigger a Wi-Fi scan
      # - switch.turn_off: wifi_scan_trigger  # Automatically turn off the switch after triggering
 
-
 interval:
   - interval: 12h  # Adjust this as needed
     then:
@@ -353,53 +352,56 @@ interval:
           if (results.empty()) {
             id(wifi_scan).publish_state("No networks found");
           } else {
-            // Sort results by RSSI (strongest to weakest)
-            std::sort(results.begin(), results.end(), [](auto &a, auto &b) {
-              return a.get_rssi() > b.get_rssi();  // Sort by highest RSSI value
+            std::vector<wifi::WiFiScanResult> unique_results;
+
+            // Filter unique results by BSSID (MAC)
+            for (auto &result : results) {
+              bool found = false;
+              for (auto &existing_result : unique_results) {
+                if (result.get_bssid() == existing_result.get_bssid()) {
+                  found = true;
+                  break;
+                }
+              }
+              if (!found) {
+                unique_results.push_back(result);
+              }
+            }
+
+            // Sort by RSSI (strongest signal first)
+            std::sort(unique_results.begin(), unique_results.end(), [](auto &a, auto &b) {
+              return a.get_rssi() > b.get_rssi();
             });
 
             std::string output;
-            int count = 0;  // To limit the number of networks displayed
-            for (auto item : results) { 
-              if (count >= 3) break;  // Limit to top 3 networks
-              auto ssid = item.get_ssid();
-              auto rssi = item.get_rssi();
-              
-              // Skip unnamed networks
-              if (ssid.empty()) {
-                continue;
-              }
+            int count = 0;  // To limit to top 3 networks
+            for (auto &result : unique_results) {
+              if (count >= 3) break;
+
+              auto ssid = result.get_ssid();
+              auto rssi = result.get_rssi();
+              if (ssid.empty()) continue;
 
               std::string stars;
+              if (rssi > -50) stars = "★★★★";
+              else if (rssi > -60) stars = "★★★";
+              else if (rssi > -70) stars = "★★";
+              else stars = "★";
 
-              // Assign stars based on RSSI value
-              if (rssi > -50) {
-                stars = "★★★★";  // Excellent signal
-              } else if (rssi > -60) {
-                stars = "★★★";   // Good signal
-              } else if (rssi > -70) {
-                stars = "★★";    // Fair signal
-              } else {
-                stars = "★";     // Weak signal
-              }
-
-              // Calculate signal strength percentage
               int signal_percent = 2 * (rssi + 100);
-              signal_percent = std::clamp(signal_percent, 0, 100);  // Ensure it's between 0 and 100%
+              signal_percent = std::clamp(signal_percent, 0, 100);
 
-              // Format output as "stars name signal strength in % signal strength in dB"
-              output += stars + " " + ssid + " " + to_string(signal_percent) + "% " + to_string(rssi) + " dB\n";
+              // Format output as stars, SSID, signal strength in %, and RSSI in dB
+              output += stars + " " + ssid + " " + std::to_string(signal_percent) + "% " + std::to_string(rssi) + " dB\n";
               count++;
             }
 
             if (output.empty()) {
               id(wifi_scan).publish_state("No named networks found");
             } else {
-              id(wifi_scan).publish_state(output);  // Publish the scan results
+              id(wifi_scan).publish_state(output);
             }
           }
-
-
 switch:
   - platform: template
     name: "Trigger WiFi Scan"
@@ -414,50 +416,52 @@ switch:
           auto results = wifi::global_wifi_component->get_scan_result();
 
           if (results.empty()) {
-            // If no networks found, publish this state
             id(wifi_scan).publish_state("No networks found");
           } else {
-            // Sort networks by signal strength (RSSI)
-            std::sort(results.begin(), results.end(), [](auto &a, auto &b) {
+            std::vector<wifi::WiFiScanResult> unique_results;
+
+            // Filter unique results by BSSID (MAC)
+            for (auto &result : results) {
+              bool found = false;
+              for (auto &existing_result : unique_results) {
+                if (result.get_bssid() == existing_result.get_bssid()) {
+                  found = true;
+                  break;
+                }
+              }
+              if (!found) {
+                unique_results.push_back(result);
+              }
+            }
+
+            // Sort by RSSI (strongest signal first)
+            std::sort(unique_results.begin(), unique_results.end(), [](auto &a, auto &b) {
               return a.get_rssi() > b.get_rssi();
             });
 
             std::string output;
             int count = 0;  // To limit to top 3 networks
+            for (auto &result : unique_results) {
+              if (count >= 3) break;
 
-            for (auto item : results) {
-              if (count >= 3) break;  // Limit to top 3 networks
-
-              auto ssid = item.get_ssid();
-              auto rssi = item.get_rssi();
-
-              if (ssid.empty()) {
-                continue;  // Skip unnamed networks
-              }
+              auto ssid = result.get_ssid();
+              auto rssi = result.get_rssi();
+              if (ssid.empty()) continue;
 
               std::string stars;
+              if (rssi > -50) stars = "★★★★";
+              else if (rssi > -60) stars = "★★★";
+              else if (rssi > -70) stars = "★★";
+              else stars = "★";
 
-              // Assign stars based on RSSI value
-              if (rssi > -50) {
-                stars = "★★★★";  // Excellent signal
-              } else if (rssi > -60) {
-                stars = "★★★";   // Good signal
-              } else if (rssi > -70) {
-                stars = "★★";    // Fair signal
-              } else {
-                stars = "★";     // Weak signal
-              }
-
-              // Calculate signal strength percentage
               int signal_percent = 2 * (rssi + 100);
               signal_percent = std::clamp(signal_percent, 0, 100);
 
-              // Format the output string as stars, SSID, percentage, and dB
-              output += stars + " " + ssid + " " + to_string(signal_percent) + "% " + to_string(rssi) + " dB\n";
+              // Format output as stars, SSID, signal strength in %, and RSSI in dB
+              output += stars + " " + ssid + " " + std::to_string(signal_percent) + "% " + std::to_string(rssi) + " dB\n";
               count++;
             }
 
-            // Publish the results or "No named networks found"
             if (output.empty()) {
               id(wifi_scan).publish_state("No named networks found");
             } else {
