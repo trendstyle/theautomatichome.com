@@ -26,7 +26,6 @@ substitutions:
 
 <<: !include .masterwap11.yaml
 
-
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
@@ -363,7 +362,7 @@ light:
 
   # Relays
   - platform: binary
-    name: "Light1"
+    name: "Landing"
     id: landing
     output: relay1
     restore_mode: ${light1_restore_mode}
@@ -373,7 +372,7 @@ light:
       - light.turn_off: led1
 
   - platform: binary
-    name: "Light2"
+    name: "Stairs"
     id: stairs
     output: relay2
     restore_mode: ${light2_restore_mode}
@@ -383,7 +382,7 @@ light:
       - light.turn_off: led2
 
   - platform: binary
-    name: "Light3"
+    name: "Serverroom"
     id: serverroom
     output: relay3
     restore_mode: ${light3_restore_mode}
@@ -482,3 +481,4 @@ time:
               - text_sensor.template.publish:
                   id: device_last_restart
                   state: !lambda 'return id(sntp_time).now().strftime("%a %d %b %Y - %I:%M:%S %p");'
+
