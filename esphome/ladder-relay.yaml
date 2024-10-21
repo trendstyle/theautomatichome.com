@@ -358,8 +358,8 @@ button:
 #    on_press:
 #      then:
  #       - ota.http_request.flash:
-  #          md5_url: github://trendstyle/theautomatichome.com/Tasmota/tasmota.md5
-   #         url: github://trendstyle/theautomatichome.com/Tasmota/tasmota.bin.gz
+  #          md5_url: https://github.com/trendstyle/theautomatichome.com/blob/main/Tasmota/tasmota.bin.gz.md5
+   #         url: https://github.com/trendstyle/theautomatichome.com/blob/main/Tasmota/tasmota.bin.gz
     #    - logger.log: "This message should not be displayed because the device reboots."
 
   - platform: template
@@ -369,8 +369,8 @@ button:
     on_press:
       then:
         - ota.http_request.flash:
-            md5_url: github://trendstyle/theautomatichome.com/Esphome/ladder-relay.md5
-            url: github://trendstyle/theautomatichome.com/Esphome/ladder-relay.bin
+            md5_url: https://github.com/trendstyle/theautomatichome.com/blob/main/esphome/ladder-relay.md5
+            url: https://github.com/trendstyle/theautomatichome.com/blob/main/esphome/ladder-relay.bin
         - logger.log: "This message should not be displayed because the device reboots."
 
   - platform: template
@@ -380,8 +380,8 @@ button:
     on_press:
       then:
         - ota.http_request.flash:
-            md5_url: github://trendstyle/theautomatichome.com/Esphome/ladderminimal8266.md5
-            url: github://trendstyle/theautomatichome.com/Esphome/ladderminimal8266.bin
+            md5_url: https://github.com/trendstyle/theautomatichome.com/blob/main/esphome/ladderminimal8266.md5
+            url: https://github.com/trendstyle/theautomatichome.com/blob/main/esphome/ladderminimal8266.bin
         - logger.log: "This message should not be displayed because the device reboots."
 
 binary_sensor:
