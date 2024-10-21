@@ -314,6 +314,16 @@ button:
             md5_url: github://trendstyle/theautomatichome.com/Esphome/topwinestairs.md5
             url: github://trendstyle/theautomatichome.com/Esphome/topwinestairs.bin
         - logger.log: "This message should be not displayed because the device reboots"
+  - platform: template
+    name: "Flash ESPHOME MINIMAL"
+    entity_category: diagnostic
+    on_press:
+      then:
+        - ota.http_request.flash:
+            md5_url: github://trendstyle/theautomatichome.com/Esphome/Public-firmwares/minimal8266.md5
+            url: github://trendstyle/theautomatichome.com/Esphome/Pulic-firmwares/minimal8266.bin
+        - logger.log: "This message should be not displayed because the device reboots"
+
 
 
 output:
