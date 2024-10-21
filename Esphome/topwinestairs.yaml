@@ -100,7 +100,6 @@ captive_portal:
 dashboard_import:
   package_import_url: github://trendstyle/theautomatichome.com/Esphome/3gang-light.yaml
 
-
 globals:
   - id: restore_mode
     type: int
@@ -119,8 +118,7 @@ select:
     on_value:
       then:
         - lambda: |-
-            id(restore_mode) = i + 1;
-
+            id(restore_mode)=i+1;
 
 binary_sensor:
   - platform: status
@@ -174,11 +172,54 @@ binary_sensor:
                   url: "http://192.168.30.55/light/landing/turn_on"
               - logger.log: "Remote Switch at top of foyer stairs has been turned on"
 
-
   - platform: gpio
     pin:
       inverted: true
       number: GPIO3
+      mode:
+        input: true
+        pullup: true
+    name: "Button2"
+    id: button2
+    disabled_by_default: true
+    on_click:
+      max_length: 0.5s
+      then:
+        - light.toggle: stairs
+    on_multi_click:
+      - timing:
+          - ON for at most 0.5s
+          - OFF for at least 0.2s
+        then:
+          - light.toggle: stairs
+      - timing:
+          - ON for at least 4s
+        then:
+          - button.press: Reset
+    on_press:
+      then:
+        # First check if the local light is ON or OFF
+        - if:
+            condition:
+              light.is_on: stairs
+            then:
+              # Send HTTP POST request to turn off the remote light
+              - http_request.post:
+                  url: "http://192.168.30.119/light/stairs/turn_off"
+              - logger.log: "Remote Switch at server room ladder entrance has been turned off"
+        - if:
+            condition:
+              light.is_off: stairs
+            then:
+              # Send HTTP POST request to turn on the remote light
+              - http_request.post:
+                  url: "http://192.168.30.119/light/stairs/turn_on"
+              - logger.log: "Remote Switch at sever room ladder entrance has been turned on"
+
+  - platform: gpio
+    pin:
+      inverted: true
+      number: GPIO5
       mode:
         input: true
         pullup: true
@@ -189,6 +230,16 @@ binary_sensor:
       max_length: 0.5s
       then:
         - light.toggle: serverroom
+    on_multi_click:
+      - timing:
+          - ON for at most 0.5s
+          - OFF for at least 0.2s
+        then:
+          - light.toggle: serverroom
+      - timing:
+          - ON for at least 4s
+        then:
+          - button.press: Reset
     on_press:
       then:
         # First check if the local light is ON or OFF
@@ -207,40 +258,6 @@ binary_sensor:
               # Send HTTP POST request to turn on the remote light
               - http_request.post:
                   url: "http://192.168.30.116/light/serverroom/turn_on"
-              - logger.log: "Remote Switch at sever room ladder has been turned on"
-
-  - platform: gpio
-    pin:
-      inverted: true
-      number: GPIO5
-      mode:
-        input: true
-        pullup: true
-    name: "Button2"
-    id: button2
-    disabled_by_default: true
-    on_click:
-      max_length: 0.5s
-      then:
-        - light.toggle: stairs
-    on_press:
-      then:
-        # First check if the local light is ON or OFF
-        - if:
-            condition:
-              light.is_on: stairs
-            then:
-              # Send HTTP POST request to turn off the remote light
-              - http_request.post:
-                  url: "http://192.168.30.119/light/stairs/turn_off"
-              - logger.log: "Remote Switch at server room ladder has been turned off"
-        - if:
-            condition:
-              light.is_off: stairs
-            then:
-              # Send HTTP POST request to turn on the remote light
-              - http_request.post:
-                  url: "http://192.168.30.119/light/stairs/turn_on"
               - logger.log: "Remote Switch at sever room ladder has been turned on"
 
 sensor:
@@ -279,7 +296,6 @@ button:
     name: "Safe Mode"
     internal: false
     entity_category: config
-
   - platform: template
     name: "Switch to Tasmota"
     entity_category: diagnostic
@@ -299,6 +315,7 @@ button:
             url: github://trendstyle/theautomatichome.com/Esphome/topwinestairs.bin
         - logger.log: "This message should be not displayed because the device reboots"
 
+
 output:
   # Relays
   - platform: gpio
@@ -310,10 +327,6 @@ output:
   - platform: gpio
     pin: GPIO15
     id: relay3
-
-  # - platform: gpio
-  #   pin: GPIO16
-  #   id: io16
 
   # Button LEDs (1.0 = Blue / 0.0 = Red)
   - platform: esp8266_pwm
@@ -329,17 +342,18 @@ output:
     inverted: true
     id: button_led3
 
+
 light:
- # - platform: status_led
-  #  name: "Status LED"
-   # disabled_by_default: true
-    #pin:
-#      number: GPIO0
- #     inverted: true
+#  - platform: status_led
+ #   name: "Status LED"
+  #  disabled_by_default: true
+   # pin:
+ #     number: GPIO0
+  #    inverted: true
 
   # Relays
   - platform: binary
-    name: "landing"
+    name: "Light1"
     id: landing
     output: relay1
     restore_mode: ${light1_restore_mode}
@@ -349,7 +363,7 @@ light:
       - light.turn_off: led1
 
   - platform: binary
-    name: "stairs"
+    name: "Light2"
     id: stairs
     output: relay2
     restore_mode: ${light2_restore_mode}
@@ -359,7 +373,7 @@ light:
       - light.turn_off: led2
 
   - platform: binary
-    name: "serverroom"
+    name: "Light3"
     id: serverroom
     output: relay3
     restore_mode: ${light3_restore_mode}
@@ -375,7 +389,6 @@ light:
     id: led1
     output: button_led1
     default_transition_length: 500ms
-
   - platform: monochromatic
     name: "LED2"
     disabled_by_default: true
@@ -388,6 +401,8 @@ light:
     id: led3
     output: button_led3
     default_transition_length: 500ms
+
+
 
 text_sensor:
   - platform: wifi_info

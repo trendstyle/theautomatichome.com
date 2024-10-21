@@ -1,0 +1,43 @@
+wifi:
+  fast_connect: true
+  networks:
+  - ssid: iot
+    password: !secret minimal_wifi_network1_password
+    manual_ip:
+      static_ip: !secret minimal_ip
+      gateway: !secret wifi_network1_gateway
+      subnet: !secret wifi_network1_subnet
+      dns1: !secret wifi_network1_dns1
+      dns2: !secret wifi_network1_dns2
+  domain: !secret domain
+  ap:
+    ssid: minimal
+    password: !secret wifi_network1_password
+    ap_timeout: 1min
+
+captive_portal:
+
+
+esp8266:
+  board: esp8285
+  restore_from_flash: true
+
+esphome:
+  name: minimal
+  name_add_mac_suffix: false
+
+preferences:
+  flash_write_interval: 1min
+
+api:
+
+ota:
+  - platform: esphome
+
+logger:
+  level: INFO
+  baud_rate: 115200
+
+
+web_server:
+  port: 80
