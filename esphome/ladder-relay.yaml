@@ -1,0 +1,580 @@
+substitutions:
+  name: "ladder-relay"
+  friendly_name: "4ch Server Room Ladder Relay"
+  wifi_network1_prefix1: !secret wifi_network1_prefix1
+  ip_suffix: "101"
+  timezone: "Australia/Perth"
+  sntp_update_interval: 6h
+  sntp_server_1: "0.pool.ntp.org"
+  sntp_server_2: "1.pool.ntp.org"
+  sntp_server_3: "2.pool.ntp.org"
+  room: "Attic"
+  relay1_restore_mode: RESTORE_DEFAULT_OFF
+  relay2_restore_mode: RESTORE_DEFAULT_OFF
+  relay3_restore_mode: RESTORE_DEFAULT_OFF
+  relay4_restore_mode: RESTORE_DEFAULT_OFF
+  device_description: "4ch Server Room Ladder Relay with esp8285"
+  log_level: "DEBUG"
+  ipv6_enable: "false"
+  project_name: "The Automatic Home.4ch Relay"
+  project_version: "v1.1.2"
+  dns_domain: ""
+  localssid: "ladder"
+
+<<: !include .masterwap11.yaml
+
+
+mqtt:
+  broker: "192.168.30.3"
+  username: "mqtt"
+  password: "10xTENfold87!"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  comment: "${device_description}"
+  area: "${room}"
+  name_add_mac_suffix: false
+  min_version: 2024.6.0
+  project:
+    name: "${project_name}"
+    version: "${project_version}"
+
+esp8266:
+  board: esp8285
+  restore_from_flash: true
+
+preferences:
+  flash_write_interval: 1min
+
+api:
+  reboot_timeout: 0s
+  services:
+    - service: scan_wifi
+      then:
+        - lambda: |-
+            wifi::global_wifi_component->start_scanning();
+  on_client_disconnected:
+    then:
+      - logger.log: "API client disconnected. Reboot scheduled for 2 AM."
+
+ota:
+  - platform: esphome
+  - platform: http_request
+
+logger:
+  level: ${log_level}
+  baud_rate: 115200
+
+mdns:
+  disabled: false
+
+network:
+  enable_ipv6: ${ipv6_enable}
+
+http_request:
+  verify_ssl: false
+
+web_server:
+  port: 80
+  version: 3
+
+
+captive_portal:
+
+dashboard_import:
+  package_import_url: github://trendstyle/theautomatichome.com/Esphome/4ch-relay.yaml
+
+switch:
+  - platform: restart
+    name: "Reboot the node"
+    internal: true
+    id: restart_switch
+  - platform: gpio
+    name: "Relay1"
+    pin: GPIO16
+    id: relay1
+    interlock: [relay2]
+    restore_mode: ${relay1_restore_mode}
+    icon: "mdi:relay"
+    internal: true  # Hides the switch from the UI
+    on_turn_on:
+      - mqtt.publish:
+          topic: "cbus/write/0/56/27/switch"
+          payload: "ON"  # or "1" depending on the C-Bus system
+      - switch.turn_off: relay2
+      - switch.turn_off: relay3      
+      - switch.turn_on: relay1
+      - switch.turn_on: relay4
+      - delay: 40s
+      - switch.turn_off: relay1
+      - switch.turn_off: relay4
+      - if:
+          condition:
+            switch.is_off: relay1
+          then:
+            # Send HTTP POST request to turn off the remote light
+            - http_request.post:
+                url: "http://192.168.30.113/light/ladder/turn_on"
+            - logger.log: "Remote Switch at top of attic ladder in server room has been turned off"
+    on_turn_off:
+      - switch.turn_off: relay4
+      - switch.turn_off: relay1
+
+  - platform: gpio
+    name: "Relay2"
+    pin: GPIO14
+    id: relay2
+    interlock: [relay1]
+    restore_mode: ${relay2_restore_mode}
+    icon: "mdi:relay"
+    internal: true  # Hides the switch from the UI
+    on_turn_on:
+      - mqtt.publish:
+          topic: "cbus/write/0/56/27/switch"
+          payload: "OFF"  # or "1" depending on the C-Bus system
+      - switch.turn_off: relay1
+      - switch.turn_off: relay4
+      - switch.turn_on: relay2
+      - switch.turn_on: relay3
+      - delay: 40s
+      - switch.turn_off: relay2
+      - switch.turn_off: relay3
+      - if:
+          condition:
+            switch.is_off: relay2
+          then:
+            # Send HTTP POST request to turn off the remote light
+            - http_request.post:
+                url: "http://192.168.30.113/light/ladder/turn_off"
+            - logger.log: "Remote Switch at top of attic ladder in server room has been turned off"
+    on_turn_off:
+      - switch.turn_off: relay3
+      - switch.turn_off: relay2
+
+  - platform: gpio
+    name: "Relay3"
+    pin: GPIO12
+    id: relay3
+    interlock: [relay1]
+    restore_mode: ${relay3_restore_mode}
+    icon: "mdi:relay"
+    internal: true  # Hides the switch from the UI
+    on_turn_on:
+      - switch.turn_off: relay1
+      - switch.turn_off: relay4
+      - switch.turn_on: relay3
+      - switch.turn_on: relay2
+      - delay: 40s
+      - switch.turn_off: relay3
+      - switch.turn_off: relay2
+    on_turn_off:
+      - switch.turn_off: relay2
+      - switch.turn_off: relay3
+
+  - platform: gpio
+    name: "Relay4"
+    pin: GPIO13
+    id: relay4
+    interlock: [relay2]
+    restore_mode: ${relay4_restore_mode}
+    icon: "mdi:relay"
+    internal: true  # Hides the switch from the UI
+    on_turn_on:
+      - switch.turn_off: relay2
+      - switch.turn_off: relay3
+      - switch.turn_on: relay4
+      - switch.turn_on: relay1
+      - delay: 40s
+      - switch.turn_off: relay4
+      - switch.turn_off: relay1
+    on_turn_off:
+      - switch.turn_off: relay1
+      - switch.turn_off: relay4
+
+
+globals:
+  - id: ladder_open
+    type: bool
+    restore_value: true
+    initial_value: "false"
+
+cover:
+  - platform: template
+    name: "Ladder"
+    optimistic: true
+    assumed_state: true
+    icon: "mdi:ladder"
+    open_action:
+      - switch.turn_off: relay2
+      - switch.turn_off: relay3
+      - switch.turn_on: relay1
+      - switch.turn_on: relay4
+      - delay: 40s
+      - switch.turn_off: relay1
+      - switch.turn_off: relay4
+      - lambda: |-
+          id(ladder_open) = true;
+      - http_request.post:
+          url: "http://192.168.30.113/light/ladder/turn_on"
+      - logger.log: "Remote Switch at top of ladder has been turned off"
+    
+    close_action:
+      - switch.turn_off: relay1
+      - switch.turn_off: relay4
+      - switch.turn_on: relay2
+      - switch.turn_on: relay3
+      - delay: 40s
+      - switch.turn_off: relay2
+      - switch.turn_off: relay3
+      - lambda: |-
+          id(ladder_open) = false;
+      - http_request.post:
+          url: "http://192.168.30.113/light/ladder/turn_off"
+      - logger.log: "Remote Switch at top of ladder has been turned off"
+    
+    stop_action:
+      - switch.turn_off: relay1
+      - switch.turn_off: relay2
+      - switch.turn_off: relay3
+      - switch.turn_off: relay4
+
+light:
+  - platform: status_led
+    name: "Status LED"
+    icon: "mdi:led-on"
+    disabled_by_default: true
+    pin:
+      inverted: true
+      number: GPIO5
+
+sensor:
+  - platform: wifi_signal
+    name: "WiFi Signal Strength"
+    update_interval: 1h
+    icon: "mdi:wifi"
+
+  - platform: uptime
+    name: "Uptime Sensor"
+    id: uptime_sensor
+    entity_category: diagnostic
+    internal: true
+    icon: "mdi:clock-outline"
+
+  - platform: wifi_signal
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"
+    icon: "mdi:wifi-strength-outline"
+
+  - platform: copy
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "%"
+    entity_category: "diagnostic"
+    icon: "mdi:wifi-strength-percent"
+
+button:
+  - platform: template
+    name: "Wi-Fi Scan"
+    id: wifi_scan_button
+    icon: "mdi:wifi-refresh"
+    on_press:
+      then:
+        - lambda: |-
+            wifi::global_wifi_component->start_scanning();
+        - delay: 10s
+        - lambda: |-
+            auto results = wifi::global_wifi_component->get_scan_result();
+            if (results.empty()) {
+              id(wifi_scan).publish_state("No networks found");
+            } else {
+              std::vector<wifi::WiFiScanResult> unique_results;
+              for (auto &result : results) {
+                bool found = false;
+                for (auto &existing_result : unique_results) {
+                  if (result.get_bssid() == existing_result.get_bssid()) {
+                    found = true;
+                    break;
+                  }
+                }
+                if (!found) {
+                  unique_results.push_back(result);
+                }
+              }
+              std::sort(unique_results.begin(), unique_results.end(), [](auto &a, auto &b) {
+                return a.get_rssi() > b.get_rssi();
+              });
+
+              std::string output;
+              int count = 0;
+              for (auto &result : unique_results) {
+                if (count >= 3) break;
+                auto ssid = result.get_ssid();
+                auto rssi = result.get_rssi();
+                if (ssid.empty()) continue;
+                std::string stars;
+                if (rssi > -50) stars = "★★★★";
+                else if (rssi > -60) stars = "★★★";
+                else if (rssi > -70) stars = "★★";
+                else stars = "★";
+                int signal_percent = 2 * (rssi + 100);
+                signal_percent = std::clamp(signal_percent, 0, 100);
+                output += stars + " " + ssid + " " + std::to_string(signal_percent) + "% " + std::to_string(rssi) + " dB\n";
+                count++;
+              }
+              if (output.empty()) {
+                id(wifi_scan).publish_state("No named networks found");
+              } else {
+                id(wifi_scan).publish_state(output);
+              }
+            }
+
+  - platform: restart
+    name: "Restart"
+    entity_category: config
+    icon: "mdi:restart"
+
+  - platform: factory_reset
+    name: "Factory Reset"
+    id: Reset
+    entity_category: config
+    icon: "mdi:factory"
+
+  - platform: safe_mode
+    name: "Safe Mode"
+    internal: false
+    entity_category: config
+    icon: "mdi:shield-check"
+
+
+#  - platform: template
+ #   name: "Switch to Tasmota"
+  #  entity_category: diagnostic
+   # icon: "mdi:swap-horizontal"
+#    on_press:
+#      then:
+ #       - ota.http_request.flash:
+  #          md5_url: github://trendstyle/theautomatichome.com/Tasmota/tasmota.md5
+   #         url: github://trendstyle/theautomatichome.com/Tasmota/tasmota.bin.gz
+    #    - logger.log: "This message should not be displayed because the device reboots."
+
+  - platform: template
+    name: "Factory reset ESPHOME"
+    entity_category: diagnostic
+    icon: "mdi:recycle"
+    on_press:
+      then:
+        - ota.http_request.flash:
+            md5_url: github://trendstyle/theautomatichome.com/Esphome/ladder-relay.md5
+            url: github://trendstyle/theautomatichome.com/Esphome/ladder-relay.bin
+        - logger.log: "This message should not be displayed because the device reboots."
+
+  - platform: template
+    name: "Flash Vintage Manor ESPHOME MINIMAL"
+    entity_category: diagnostic
+    icon: "mdi:arrow-up"
+    on_press:
+      then:
+        - ota.http_request.flash:
+            md5_url: github://trendstyle/theautomatichome.com/Esphome/ladderminimal8266.md5
+            url: github://trendstyle/theautomatichome.com/Esphome/ladderminimal8266.bin
+        - logger.log: "This message should not be displayed because the device reboots."
+
+binary_sensor:
+  - platform: template
+    name: "Ladder State Control"
+    id: ladder_state_control
+    lambda: |-
+      if (id(ladder_state).state == "Ladder Down") {
+        return true;  // Ladder down
+      } else {
+        return false; // Ladder up
+      }
+    on_state:
+      - if:
+          condition:
+            binary_sensor.is_on: ladder_state_control  # Ladder down
+          then:
+            - switch.turn_off: relay3
+            - switch.turn_off: relay2
+            - switch.turn_on: relay1
+            - switch.turn_on: relay4
+            - delay: 40s
+            - switch.turn_off: relay1
+            - switch.turn_off: relay4
+            - http_request.post:
+                url: "http://192.168.30.113/light/ladder/turn_on"  # Turn on remote light
+            - logger.log: "Ladder is down. Relay1 turned on, remote light turned on."
+      - if:
+          condition:
+            binary_sensor.is_off: ladder_state_control  # Ladder up
+          then:
+            - switch.turn_off: relay1
+            - switch.turn_off: relay4
+            - switch.turn_on: relay2
+            - switch.turn_on: relay3
+            - delay: 40s
+            - switch.turn_off: relay2
+            - switch.turn_off: relay3
+            - if:
+                condition:
+                  switch.is_off: relay2
+                then:
+                  - http_request.post:
+                      url: "http://192.168.30.113/light/ladder/turn_off"  # Turn off remote light
+                  - logger.log: "Ladder is up. Relay2 turned off, remote light turned off."
+
+
+
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: "${timezone}"
+    update_interval: ${sntp_update_interval}
+    servers:
+      - "${sntp_server_1}"
+      - "${sntp_server_2}"
+      - "${sntp_server_3}"
+    on_time_sync:
+      then:
+        - if:
+            condition:
+              lambda: 'return id(device_last_restart).state == "";'
+            then:
+              - text_sensor.template.publish:
+                  id: device_last_restart
+                  state: !lambda 'return id(sntp_time).now().strftime("%a %d %b %Y - %I:%M:%S %p");'
+    on_time:
+      - hours: 2
+        minutes: 0
+        then:
+          - logger.log: "It's 2 AM. Triggering the restart switch."
+          - switch.turn_on: restart_switch  # Trigger the restart switch at 2 AM
+
+interval:
+  - interval: 12h  # Adjust as needed
+    then:
+      - lambda: |-
+          auto results = wifi::global_wifi_component->get_scan_result();
+          if (results.empty()) {
+            id(wifi_scan).publish_state("No networks found");
+          } else {
+            std::vector<wifi::WiFiScanResult> unique_results;
+            for (auto &result : results) {
+              bool found = false;
+              for (auto &existing_result : unique_results) {
+                if (result.get_bssid() == existing_result.get_bssid()) {
+                  found = true;
+                  break;
+                }
+              }
+              if (!found) {
+                unique_results.push_back(result);
+              }
+            }
+
+            std::sort(unique_results.begin(), unique_results.end(), [](auto &a, auto &b) {
+              return a.get_rssi() > b.get_rssi();
+            });
+
+            std::string output;
+            int count = 0;
+            for (auto &result : unique_results) {
+              if (count >= 3) break;
+              auto ssid = result.get_ssid();
+              auto rssi = result.get_rssi();
+              if (ssid.empty()) continue;
+              std::string stars;
+              if (rssi > -50) stars = "★★★★";
+              else if (rssi > -60) stars = "★★★";
+              else if (rssi > -70) stars = "★★";
+              else stars = "★";
+              int signal_percent = 2 * (rssi + 100);
+              signal_percent = std::clamp(signal_percent, 0, 100);
+              output += stars + " " + ssid + " " + std::to_string(signal_percent) + "% " + std::to_string(rssi) + " dB\n";
+              count++;
+            }
+            if (output.empty()) {
+              id(wifi_scan).publish_state("No named networks found");
+            } else {
+              id(wifi_scan).publish_state(output);
+            }
+          }
+
+text_sensor:
+  - platform: mqtt_subscribe
+    name: "Cbus Ladder State"
+    id: ladder_state
+    topic: "cbus/read/0/56/27/state"
+    icon: "mdi:stairs-box"
+    on_value:
+      then:
+        - lambda: |-
+            if (x == "ON") {
+              id(ladder_state).publish_state("Ladder Down");
+            } else if (x == "OFF") {
+              id(ladder_state).publish_state("Ladder Up");
+            }
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+      entity_category: diagnostic
+      icon: "mdi:ip"
+
+    ssid:
+      name: "Connected SSID"
+      entity_category: diagnostic
+      icon: "mdi:wifi"
+
+    mac_address:
+      name: "Mac Address"
+      entity_category: diagnostic
+      icon: "mdi:barcode-scan"
+
+    bssid:
+      name: "WiFi BSSID"
+      entity_category: diagnostic
+      icon: "mdi:router-wireless"
+
+    dns_address:
+      name: "WiFi DNS Address"
+      entity_category: diagnostic
+      icon: "mdi:domain"
+
+  - platform: template
+    name: "Last WiFi Scan Results"
+    id: wifi_scan
+    icon: "mdi:wifi-marker"
+
+  - platform: template
+    name: "Last Restart"
+    id: device_last_restart
+    icon: "mdi:clock"
+
+  - platform: template
+    name: "Uptime"
+    entity_category: diagnostic
+    lambda: |-
+      int seconds = (id(uptime_sensor).state);
+      int days = seconds / (24 * 3600);
+      seconds = seconds % (24 * 3600);
+      int hours = seconds / 3600;
+      seconds = seconds % 3600;
+      int minutes = seconds / 60;
+      seconds = seconds % 60;
+      if (days > 3650) {
+        return {"Starting up"};
+      } else if (days) {
+        return { (String(days) + "d " + String(hours) + "h " + String(minutes) + "m " + String(seconds) + "s").c_str() };
+      } else if (hours) {
+        return { (String(hours) + "h " + String(minutes) + "m " + String(seconds) + "s").c_str() };
+      } else if (minutes) {
+        return { (String(minutes) + "m " + String(seconds) + "s").c_str() };
+      } else {
+        return { (String(seconds) + "s").c_str() };
+      }
+    icon: mdi:clock-start
