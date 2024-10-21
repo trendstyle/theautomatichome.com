@@ -1,12 +1,10 @@
 substitutions:
-  name: "top-winecellar-stairs"
+  name: "topwinestairs"
   friendly_name: "Light Switches at top of the wine cellar stairs"
   wifi_network1_prefix1: !secret wifi_network1_prefix1
   ip_suffix: "231"
   timezone: "Australia/Perth"
-  # Set the duration between the sntp service polling ntp.org servers for an update
   sntp_update_interval: 6h
-  # Network time servers for your region, enter from lowest to highest priority. To use local servers update as per zones or countries at: https://www.ntppool.org/zone/@
   sntp_server_1: "0.pool.ntp.org"
   sntp_server_2: "1.pool.ntp.org"
   sntp_server_3: "2.pool.ntp.org"
@@ -14,12 +12,10 @@ substitutions:
   light1_restore_mode: RESTORE_DEFAULT_OFF
   light2_restore_mode: RESTORE_DEFAULT_OFF
   light3_restore_mode: RESTORE_DEFAULT_OFF
-  # Description as appears in ESPHome & top of webserver page
   device_description: "3-Gang Wall light switch located at top of stairs above wine cellar esp8266"
   log_level: "DEBUG"
   ipv6_enable: "false"
   project_name: "The Automatic Home.2Gang Switch V2"
-  # Projection version denotes the release version of the yaml file, allowing checking of deployed vs latest version
   project_version: "v1.1.2"
   dns_domain: ""
   localssid: "topwinestairs"
@@ -36,33 +32,6 @@ esphome:
   project:
     name: "${project_name}"
     version: "${project_version}"
-  on_boot:
-    - priority: 600
-      then:
-        - select.set_index:
-            id: power_mode
-            index: !lambda |-
-                    return id(restore_mode)-1;
-        - lambda: |-
-              switch(id(restore_mode))
-              {
-              case 1:{
-                      id(landing).turn_off();
-                      id(stairs).turn_off();
-                      id(serverroom).turn_off();
-                      break;
-                            }
-              case 2:{
-                      id(landing).turn_on();
-                      id(stairs).turn_on();
-                      id(serverroom).turn_on();
-                      break;
-                            }
-              default:{
-                      break;
-                            }
-              }
-
 
 esp8266:
   board: esp8285
@@ -72,6 +41,11 @@ preferences:
   flash_write_interval: 1min
 
 api:
+  services:
+    - service: scan_wifi
+      then:
+        - lambda: |-
+            wifi::global_wifi_component->start_scanning();
 
 ota:
   - platform: esphome
@@ -120,11 +94,6 @@ select:
             id(restore_mode)=i+1;
 
 binary_sensor:
-  - platform: status
-    name: "Status"
-    entity_category: diagnostic
-
-  # Touch Buttons
   - platform: gpio
     pin:
       inverted: true
@@ -135,198 +104,89 @@ binary_sensor:
     name: "Button1"
     id: button1
     disabled_by_default: true
-    on_multi_click:
-      - timing:
-          - ON for at most 0.5s
-          - OFF for at least 0.2s
-        then:
-          - light.toggle: landing
-      - timing:
-          - ON for at least 4s
-        then:
-          - button.press: Reset
-    on_press:
-      then:
-        # First check if the local light is ON or OFF
-        - if:
-            condition:
-              light.is_on: landing
-            then:
-              # Send HTTP POST request to turn off the remote light
-              - http_request.post:
-                  url: "http://192.168.30.94/light/landing/turn_off"
-              - logger.log: "Remote Switch at midway landing has been turned off"
-              - http_request.post:
-                  url: "http://192.168.30.55/light/landing/turn_off"
-              - logger.log: "Remote Switch at top of foyer stairs has been turned off"
-        - if:
-            condition:
-              light.is_off: landing
-            then:
-              # Send HTTP POST request to turn on the remote light
-              - http_request.post:
-                  url: "http://192.168.30.94/light/landing/turn_on"
-              - logger.log: "Remote Switch at midway landing has been turned on"
-              - http_request.post:
-                  url: "http://192.168.30.55/light/landing/turn_on"
-              - logger.log: "Remote Switch at top of foyer stairs has been turned on"
-
-  - platform: gpio
-    pin:
-      inverted: true
-      number: GPIO3
-      mode:
-        input: true
-        pullup: true
-    name: "Button2"
-    id: button2
-    disabled_by_default: true
-    on_click:
-      max_length: 0.5s
-      then:
-        - light.toggle: stairs
-    on_multi_click:
-      - timing:
-          - ON for at most 0.5s
-          - OFF for at least 0.2s
-        then:
-          - light.toggle: stairs
-      - timing:
-          - ON for at least 4s
-        then:
-          - button.press: Reset
-    on_press:
-      then:
-        # First check if the local light is ON or OFF
-        - if:
-            condition:
-              light.is_on: stairs
-            then:
-              # Send HTTP POST request to turn off the remote light
-              - http_request.post:
-                  url: "http://192.168.30.119/light/stairs/turn_off"
-              - logger.log: "Remote Switch at server room ladder entrance has been turned off"
-        - if:
-            condition:
-              light.is_off: stairs
-            then:
-              # Send HTTP POST request to turn on the remote light
-              - http_request.post:
-                  url: "http://192.168.30.119/light/stairs/turn_on"
-              - logger.log: "Remote Switch at sever room ladder entrance has been turned on"
-
-  - platform: gpio
-    pin:
-      inverted: true
-      number: GPIO5
-      mode:
-        input: true
-        pullup: true
-    name: "Button3"
-    id: button3
-    disabled_by_default: true
-    on_click:
-      max_length: 0.5s
-      then:
-        - light.toggle: serverroom
-    on_multi_click:
-      - timing:
-          - ON for at most 0.5s
-          - OFF for at least 0.2s
-        then:
-          - light.toggle: serverroom
-      - timing:
-          - ON for at least 4s
-        then:
-          - button.press: Reset
-    on_press:
-      then:
-        # First check if the local light is ON or OFF
-        - if:
-            condition:
-              light.is_on: serverroom
-            then:
-              # Send HTTP POST request to turn off the remote light
-              - http_request.post:
-                  url: "http://192.168.30.113/light/serverroom/turn_off"
-              - logger.log: "Remote Switch at server room ladder has been turned off"
-        - if:
-            condition:
-              light.is_off: serverroom
-            then:
-              # Send HTTP POST request to turn on the remote light
-              - http_request.post:
-                  url: "http://192.168.30.116/light/serverroom/turn_on"
-              - logger.log: "Remote Switch at sever room ladder has been turned on"
+    icon: "mdi:gesture-tap"
 
 sensor:
+  - platform: wifi_signal
+    name: "WiFi Signal Strength"
+    update_interval: 1h
+    icon: "mdi:wifi"
+
   - platform: uptime
     name: "Uptime Sensor"
     id: uptime_sensor
     entity_category: diagnostic
     internal: true
+    icon: "mdi:clock-outline"
 
   - platform: wifi_signal
     name: "WiFi Signal dB"
     id: wifi_signal_db
     update_interval: 60s
     entity_category: "diagnostic"
+    icon: "mdi:wifi-strength-outline"
 
   - platform: copy
     source_id: wifi_signal_db
     name: "WiFi Signal Percent"
     filters:
       - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
-    unit_of_measurement: "Signal %"
+    unit_of_measurement: "%"
     entity_category: "diagnostic"
-    device_class: ""
+    icon: "mdi:wifi-strength-percent"
 
 button:
   - platform: restart
     name: "Restart"
     entity_category: config
+    icon: "mdi:restart"
 
   - platform: factory_reset
     name: "Factory Reset"
     id: Reset
     entity_category: config
+    icon: "mdi:factory"
 
   - platform: safe_mode
     name: "Safe Mode"
     internal: false
     entity_category: config
+    icon: "mdi:shield-check"
+
   - platform: template
     name: "Switch to Tasmota"
     entity_category: diagnostic
+    icon: "mdi:swap-horizontal"
     on_press:
       then:
         - ota.http_request.flash:
             md5_url: github://trendstyle/theautomatichome.com/Tasmota/tasmota.md5
             url: github://trendstyle/theautomatichome.com/Tasmota/tasmota.bin.gz
         - logger.log: "This message should be not displayed because the device reboots"
+
   - platform: template
     name: "Factory reset ESPHOME"
     entity_category: diagnostic
+    icon: "mdi:recycle"
     on_press:
       then:
         - ota.http_request.flash:
             md5_url: github://trendstyle/theautomatichome.com/Esphome/topwinestairs.md5
             url: github://trendstyle/theautomatichome.com/Esphome/topwinestairs.bin
         - logger.log: "This message should be not displayed because the device reboots"
+
   - platform: template
     name: "Flash ESPHOME MINIMAL"
     entity_category: diagnostic
+    icon: "mdi:arrow-up"
     on_press:
       then:
         - ota.http_request.flash:
             md5_url: github://trendstyle/theautomatichome.com/Esphome/Public-firmwares/minimal8266.md5
-            url: github://trendstyle/theautomatichome.com/Esphome/Pulic-firmwares/minimal8266.bin
+            url: github://trendstyle/theautomatichome.com/Esphome/Public-firmwares/minimal8266.bin
         - logger.log: "This message should be not displayed because the device reboots"
 
-
-
 output:
-  # Relays
   - platform: gpio
     pin: GPIO13
     id: relay1
@@ -337,7 +197,6 @@ output:
     pin: GPIO15
     id: relay3
 
-  # Button LEDs (1.0 = Blue / 0.0 = Red)
   - platform: esp8266_pwm
     pin: GPIO16
     inverted: true
@@ -351,89 +210,86 @@ output:
     inverted: true
     id: button_led3
 
-
 light:
-#  - platform: status_led
- #   name: "Status LED"
-  #  disabled_by_default: true
-   # pin:
- #     number: GPIO0
-  #    inverted: true
-
-  # Relays
   - platform: binary
     name: "Landing"
     id: landing
     output: relay1
     restore_mode: ${light1_restore_mode}
-    on_turn_on:
-      - light.turn_on: led1
-    on_turn_off:
-      - light.turn_off: led1
+    icon: "mdi:lightbulb-on"
 
   - platform: binary
     name: "Stairs"
     id: stairs
     output: relay2
     restore_mode: ${light2_restore_mode}
-    on_turn_on:
-      - light.turn_on: led2
-    on_turn_off:
-      - light.turn_off: led2
+    icon: "mdi:lightbulb-on"
 
   - platform: binary
     name: "Serverroom"
     id: serverroom
     output: relay3
     restore_mode: ${light3_restore_mode}
-    on_turn_on:
-      - light.turn_on: led3
-    on_turn_off:
-      - light.turn_off: led3
+    icon: "mdi:lightbulb-on"
 
-  # Button LEDs
   - platform: monochromatic
     name: "LED1"
-    disabled_by_default: true
     id: led1
     output: button_led1
     default_transition_length: 500ms
+    icon: "mdi:led-on"
+
   - platform: monochromatic
     name: "LED2"
-    disabled_by_default: true
     id: led2
     output: button_led2
     default_transition_length: 500ms
+    icon: "mdi:led-on"
+
   - platform: monochromatic
     name: "LED3"
-    disabled_by_default: true
     id: led3
     output: button_led3
     default_transition_length: 500ms
-
-
+    icon: "mdi:led-on"
 
 text_sensor:
   - platform: wifi_info
     ip_address:
       name: "IP Address"
       entity_category: diagnostic
+      icon: "mdi:ip"
+
     ssid:
       name: "Connected SSID"
       entity_category: diagnostic
+      icon: "mdi:wifi"
+
     mac_address:
       name: "Mac Address"
       entity_category: diagnostic
+      icon: "mdi:barcode-scan"
 
-  #  Creates a sensor showing when the device was last restarted
+    bssid:
+      name: "WiFi BSSID"
+      entity_category: diagnostic
+      icon: "mdi:router-wireless"
+
+    dns_address:
+      name: "WiFi DNS Address"
+      entity_category: diagnostic
+      icon: "mdi:domain"
+
   - platform: template
-    name: 'Last Restart'
-    id: device_last_restart
-    icon: mdi:clock
-    entity_category: diagnostic
-#    device_class: timestamp
+    name: "Last WiFi Scan Results"
+    id: wifi_scan
+    icon: "mdi:wifi-marker"
 
-  #  Creates a sensor of the uptime of the device, in formatted days, hours, minutes and seconds
+  - platform: template
+    name: "Last Restart"
+    id: device_last_restart
+    icon: "mdi:clock"
+
   - platform: template
     name: "Uptime"
     entity_category: diagnostic
@@ -445,35 +301,30 @@ text_sensor:
       seconds = seconds % 3600;
       int minutes = seconds /  60;
       seconds = seconds % 60;
-      if ( days > 3650 ) {
-        return { "Starting up" };
-      } else if ( days ) {
-        return { (String(days) +"d " + String(hours) +"h " + String(minutes) +"m "+ String(seconds) +"s").c_str() };
-      } else if ( hours ) {
-        return { (String(hours) +"h " + String(minutes) +"m "+ String(seconds) +"s").c_str() };
-      } else if ( minutes ) {
-        return { (String(minutes) +"m "+ String(seconds) +"s").c_str() };
+      if (days > 3650) {
+        return {"Starting up"};
+      } else if (days) {
+        return { (String(days) + "d " + String(hours) + "h " + String(minutes) + "m " + String(seconds) + "s").c_str() };
+      } else if (hours) {
+        return { (String(hours) + "h " + String(minutes) + "m " + String(seconds) + "s").c_str() };
+      } else if (minutes) {
+        return { (String(minutes) + "m " + String(seconds) + "s").c_str() };
       } else {
-        return { (String(seconds) +"s").c_str() };
+        return { (String(seconds) + "s").c_str() };
       }
     icon: mdi:clock-start
 
 time:
   - platform: sntp
     id: sntp_time
-  # Define the timezone of the device
     timezone: "${timezone}"
-  # Change sync interval from default 5min to 6 hours (or as set in substitutions)
     update_interval: ${sntp_update_interval}
-  # Set specific sntp servers to use
     servers:
       - "${sntp_server_1}"
       - "${sntp_server_2}"
       - "${sntp_server_3}"
-  # Publish the time the device was last restarted
     on_time_sync:
       then:
-        # Update last restart time, but only once.
         - if:
             condition:
               lambda: 'return id(device_last_restart).state == "";'
@@ -482,3 +333,135 @@ time:
                   id: device_last_restart
                   state: !lambda 'return id(sntp_time).now().strftime("%a %d %b %Y - %I:%M:%S %p");'
 
+
+
+#switch:
+ # - platform: template
+  #  name: "Trigger WiFi Scan"
+  #  id: wifi_scan_trigger
+   # turn_on_action:
+    #  - lambda: |-
+     #     wifi::global_wifi_component->start_scanning();  // Manually trigger a Wi-Fi scan
+     # - switch.turn_off: wifi_scan_trigger  # Automatically turn off the switch after triggering
+
+
+interval:
+  - interval: 12h  # Adjust this as needed
+    then:
+      - lambda: |-
+          auto results = wifi::global_wifi_component->get_scan_result();
+          if (results.empty()) {
+            id(wifi_scan).publish_state("No networks found");
+          } else {
+            // Sort results by RSSI (strongest to weakest)
+            std::sort(results.begin(), results.end(), [](auto &a, auto &b) {
+              return a.get_rssi() > b.get_rssi();  // Sort by highest RSSI value
+            });
+
+            std::string output;
+            int count = 0;  // To limit the number of networks displayed
+            for (auto item : results) { 
+              if (count >= 3) break;  // Limit to top 3 networks
+              auto ssid = item.get_ssid();
+              auto rssi = item.get_rssi();
+              
+              // Skip unnamed networks
+              if (ssid.empty()) {
+                continue;
+              }
+
+              std::string stars;
+
+              // Assign stars based on RSSI value
+              if (rssi > -50) {
+                stars = "★★★★";  // Excellent signal
+              } else if (rssi > -60) {
+                stars = "★★★";   // Good signal
+              } else if (rssi > -70) {
+                stars = "★★";    // Fair signal
+              } else {
+                stars = "★";     // Weak signal
+              }
+
+              // Calculate signal strength percentage
+              int signal_percent = 2 * (rssi + 100);
+              signal_percent = std::clamp(signal_percent, 0, 100);  // Ensure it's between 0 and 100%
+
+              // Format output as "stars name signal strength in % signal strength in dB"
+              output += stars + " " + ssid + " " + to_string(signal_percent) + "% " + to_string(rssi) + " dB\n";
+              count++;
+            }
+
+            if (output.empty()) {
+              id(wifi_scan).publish_state("No named networks found");
+            } else {
+              id(wifi_scan).publish_state(output);  // Publish the scan results
+            }
+          }
+
+
+switch:
+  - platform: template
+    name: "Trigger WiFi Scan"
+    id: wifi_scan_trigger
+    turn_on_action:
+      - lambda: |-
+          // Start the Wi-Fi scan
+          wifi::global_wifi_component->start_scanning();
+      - delay: 10s  # Allow time for the scan to complete
+      - lambda: |-
+          // Get the scan results
+          auto results = wifi::global_wifi_component->get_scan_result();
+
+          if (results.empty()) {
+            // If no networks found, publish this state
+            id(wifi_scan).publish_state("No networks found");
+          } else {
+            // Sort networks by signal strength (RSSI)
+            std::sort(results.begin(), results.end(), [](auto &a, auto &b) {
+              return a.get_rssi() > b.get_rssi();
+            });
+
+            std::string output;
+            int count = 0;  // To limit to top 3 networks
+
+            for (auto item : results) {
+              if (count >= 3) break;  // Limit to top 3 networks
+
+              auto ssid = item.get_ssid();
+              auto rssi = item.get_rssi();
+
+              if (ssid.empty()) {
+                continue;  // Skip unnamed networks
+              }
+
+              std::string stars;
+
+              // Assign stars based on RSSI value
+              if (rssi > -50) {
+                stars = "★★★★";  // Excellent signal
+              } else if (rssi > -60) {
+                stars = "★★★";   // Good signal
+              } else if (rssi > -70) {
+                stars = "★★";    // Fair signal
+              } else {
+                stars = "★";     // Weak signal
+              }
+
+              // Calculate signal strength percentage
+              int signal_percent = 2 * (rssi + 100);
+              signal_percent = std::clamp(signal_percent, 0, 100);
+
+              // Format the output string as stars, SSID, percentage, and dB
+              output += stars + " " + ssid + " " + to_string(signal_percent) + "% " + to_string(rssi) + " dB\n";
+              count++;
+            }
+
+            // Publish the results or "No named networks found"
+            if (output.empty()) {
+              id(wifi_scan).publish_state("No named networks found");
+            } else {
+              id(wifi_scan).publish_state(output);
+            }
+          }
+      - switch.turn_off: wifi_scan_trigger  # Automatically turn off the switch after the action
